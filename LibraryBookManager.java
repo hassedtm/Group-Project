@@ -3,7 +3,7 @@
  - Christian Caraballo, Hassid Trimarchi, Nikita Ryabtsev.
  Contributions:
  - Christian Caraballo: Drafting the initial code.
- - Hassid Trimarchi: (insert contributions here)
+ - Hassid Trimarchi: Disabled SSL+Timezone warnings to avoid MySQL warnings, improved refresh system refreshAll(){}, and updated the auto-refresh for all CRUD operations.
  - Nikita Ryabtsev: (insert contributions here)
  
  
@@ -28,6 +28,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
+// Main Class!!!
 public class LibraryBookManager extends Application {
 
     private TableView<Book> tableView;
@@ -44,10 +45,10 @@ public class LibraryBookManager extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        try {
+        try { 
             dbManager = new DatabaseManager(
-                    "jdbc:mysql://localhost:3306/librarydb",
-                    "scott",
+                    "jdbc:mysql://localhost:3306/librarydb?serverTimezone=UTC&useSSL=false", //sets the timezone to avoid warnings and disables SSL
+                    "scott", 
                     "tiger");
         } catch (SQLException e) {
             showFatalDatabaseError(e);
@@ -130,13 +131,20 @@ public class LibraryBookManager extends Application {
         try {
             authors.setAll(dbManager.getAllAuthors());
             books.setAll(dbManager.getAllBooks());
+
+            clearInputs(); //resets fields after every DB reload
+            tableView.getSelectionModel().clearSelection();
+
             statusLabel.setText("Data loaded. Authors: " + authors.size() + ", Books: " + books.size());
         } catch (SQLException e) {
             statusLabel.setText("Error loading data: " + e.getMessage());
             e.printStackTrace();
         }
     }
-
+    private void refreshAll(String fresh){
+        loadAllData();
+        statusLabel.setText(fresh);
+    }
     private void populateFieldsFromSelection(Book b) {
         if (b == null) {
             titleField.clear();
@@ -161,9 +169,9 @@ public class LibraryBookManager extends Application {
         try {
             int year = Integer.parseInt(yearText);
             int newId = dbManager.addBook(title, selectedAuthor.getAuthorID(), year);
-            loadAllData();
-            statusLabel.setText("Added book (ID " + newId + ").");
-            clearInputs();
+           
+            refreshAll("Added book (ID" +newId+")."); //HT
+
         } catch (SQLException e) {
             statusLabel.setText("Add failed: " + e.getMessage());
             e.printStackTrace();
@@ -187,12 +195,11 @@ public class LibraryBookManager extends Application {
             int year = Integer.parseInt(yearText);
             boolean ok = dbManager.updateBook(selected.getBookID(), title, selectedAuthor.getAuthorID(), year);
             if (ok) {
-                loadAllData();
-                statusLabel.setText("Updated book ID " + selected.getBookID());
+                refreshAll("Updated book ID "+selected.getBookID());
             } else {
                 statusLabel.setText("Update failed: book might not exist.");
             }
-            clearInputs();
+            //clearInputs();
         } catch (SQLException e) {
             statusLabel.setText("Update failed: " + e.getMessage());
             e.printStackTrace();
@@ -218,12 +225,11 @@ public class LibraryBookManager extends Application {
         try {
             boolean ok = dbManager.deleteBook(selected.getBookID());
             if (ok) {
-                loadAllData();
-                statusLabel.setText("Deleted book ID " + selected.getBookID());
+               refreshAll("Deleted book ID "+selected.getBookID());
             } else {
                 statusLabel.setText("Delete failed: book might not exist.");
             }
-            clearInputs();
+            //clearInputs();
         } catch (SQLException e) {
             statusLabel.setText("Delete failed: " + e.getMessage());
             e.printStackTrace();
@@ -286,8 +292,9 @@ class DatabaseManager {
 
     public DatabaseManager(String url, String user, String password) throws SQLException {
         try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-        } catch (ClassNotFoundException ignored) {
+            Class.forName("com.mysql.cj.jdbc.Driver"); //MySQL driver is not on the classpath, it is ignored
+        } catch (ClassNotFoundException ignored) { //ensure that in pom.xml has MySQL driver dependency
+            //log/print exception to fully see the cause
         }
         conn = DriverManager.getConnection(url, user, password);
         conn.setAutoCommit(true);
